@@ -3,6 +3,7 @@
 # @Time      :2023/7/6 09:55
 # @Author    :lovemefan
 # @Email     :lovemefan@outlook.com
+import os.path
 import re
 
 import requests
@@ -28,15 +29,19 @@ def generate_paper_list(page_nun):
 
 
 def download_paper(id: str, title):
-    headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:57.0) Gecko/20100101 Firefox/57.0'}
-    pdf_url = f"https://ieeexplore.ieee.org/ielx7/10094559/10094560/{id}.pdf"
-    print(f"pfd download url: {pdf_url}")
-    response = requests.get(pdf_url, headers=headers)
-    if response.status_code != 200:
-        raise ValueError(response.text)
-    with open(f'../papers/{title}.pdf', 'wb') as pdf:
-        pdf.write(response.content)
-    print(f"Download: {title}")
+    if os.path.exists(f'../papers/{title}.pdf'):
+        print(f"../papers/{title}.pdf is exist")
+    else:
+
+        headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:57.0) Gecko/20100101 Firefox/57.0'}
+        pdf_url = f"https://ieeexplore.ieee.org/ielx7/10094559/10094560/{id}.pdf"
+        print(f"pfd download url: {pdf_url}")
+        response = requests.get(pdf_url, timeout=80, headers=headers)
+        if response.status_code != 200:
+            raise ValueError(response.text)
+        with open(f'../papers/{title}.pdf', 'wb') as pdf:
+            pdf.write(response.content)
+        print(f"Download: {title}")
 
 
 def get_papers_cite(page: int):
@@ -55,7 +60,7 @@ def get_papers_cite(page: int):
     papers_list = []
     for item in tqdm(result['records']):
         paper_info = dict()
-        paper_info['title'] = item['articleTitle']
+        paper_info['title'] = item['articleTitle'].replace('/', ' or ')
         paper_info['doi'] = item['doi']
         paper_info['pdfLink'] = f"https://ieeexplore.ieee.org{item['pdfLink']}"
         print(paper_info)
