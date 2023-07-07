@@ -36,9 +36,22 @@ def download_paper(id: str, title):
         headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:57.0) Gecko/20100101 Firefox/57.0'}
         pdf_url = f"https://ieeexplore.ieee.org/ielx7/10094559/10094560/{id}.pdf"
         print(f"pfd download url: {pdf_url}")
-        response = requests.get(pdf_url, timeout=80, headers=headers)
-        if response.status_code != 200:
-            raise ValueError(response.text)
+        try:
+            response = requests.get(pdf_url, timeout=80, headers=headers)
+            if response.status_code != 200:
+                # retry
+                raise requests.exceptions.ConnectionError(response.text)
+        except requests.exceptions.ConnectionError as e:
+            for i in range(5):
+                try:
+                    response = requests.get(pdf_url, timeout=80, headers=headers)
+                except Exception:
+                    continue
+
+                if response.status_code == 200:
+                    break
+            raise ValueError(e)
+
         with open(f'../papers/{title}.pdf', 'wb') as pdf:
             pdf.write(response.content)
         print(f"Download: {title}")
