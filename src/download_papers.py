@@ -3,9 +3,12 @@
 # @Time      :2023/7/6 09:55
 # @Author    :lovemefan
 # @Email     :lovemefan@outlook.com
+import asyncio
 import os.path
 import re
+import time
 
+import aiohttp
 import requests
 import json
 from tqdm import tqdm
@@ -28,32 +31,40 @@ def generate_paper_list(page_nun):
         json.dump(papers_data, file, indent=4)
 
 
-def download_paper(id: str, title):
+async def get_body(url, timeout=80):
+    headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:57.0) Gecko/20100101 Firefox/57.0'}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, timeout=timeout, headers=headers) as response:
+            content = await response.read()
+            return response.status, content
+
+
+async def download_paper(id: str, title):
     if os.path.exists(f'../papers/{title}.pdf'):
         print(f"../papers/{title}.pdf is exist")
     else:
 
-        headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:57.0) Gecko/20100101 Firefox/57.0'}
         pdf_url = f"https://ieeexplore.ieee.org/ielx7/10094559/10094560/{id}.pdf"
-        print(f"pfd download url: {pdf_url}")
+        print(f"{title} download url: {pdf_url}")
         try:
-            response = requests.get(pdf_url, timeout=80, headers=headers)
-            if response.status_code != 200:
+            status_code, content = await get_body(pdf_url)
+            if status_code != 200:
                 # retry
-                raise requests.exceptions.ConnectionError(response.text)
+                raise requests.exceptions.ConnectionError(content)
         except requests.exceptions.ConnectionError as e:
-            for i in range(5):
+            for i in range(10):
+                await asyncio.sleep(1)
                 try:
-                    response = requests.get(pdf_url, timeout=80, headers=headers)
+                    status_code, content = await get_body(pdf_url)
                 except Exception:
                     continue
 
-                if response.status_code == 200:
+                if status_code == 200:
                     break
             raise ValueError(e)
 
         with open(f'../papers/{title}.pdf', 'wb') as pdf:
-            pdf.write(response.content)
+            pdf.write(content)
         print(f"Download: {title}")
 
 
@@ -61,7 +72,7 @@ def get_papers_cite(page: int):
     data = {
         "isnumber": "10094560",
         "sortType": "vol-only-seq",
-        "rowsPerPage": "100",
+        "rowsPerPage": "10",
         "pageNumber": f"{page}",
         "punumber": "10094559"
     }
@@ -69,19 +80,24 @@ def get_papers_cite(page: int):
         "Origin": "https://ieeexplore.ieee.org"
     }
     response = requests.post(TOC_URL, headers=headers, json=data)
+    time.sleep(2)
     result = json.loads(response.text)
     papers_list = []
+    tasks = []
     for item in tqdm(result['records']):
         paper_info = dict()
         paper_info['title'] = item['articleTitle'].replace('/', ' or ')
         paper_info['doi'] = item['doi']
         paper_info['pdfLink'] = f"https://ieeexplore.ieee.org{item['pdfLink']}"
-        print(paper_info)
         papers_list.append(paper_info)
-        download_paper(paper_info['doi'][-8:], paper_info['title'])
+
+        tasks.append(download_paper(paper_info['doi'][-8:], paper_info['title']))
+    loop = asyncio.get_event_loop()
+    asyncio.gather(*tasks).add_done_callback(lambda x: loop.stop())
+    loop.run_forever()
 
     return result['records'], papers_list
 
 
 if __name__ == '__main__':
-    generate_paper_list(28)
+    generate_paper_list(272)
