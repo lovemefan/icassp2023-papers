@@ -11,4 +11,4 @@ python download_papers.py
 
 Classified by session see [session.md](metadata/session.md)
 
-Classified by topic see [session.md](metadata/topic.md)
+Classified by topic see [topic.md](metadata/topic.md)
